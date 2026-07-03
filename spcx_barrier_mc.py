@@ -30,11 +30,42 @@ st.set_page_config(page_title="SPCX Barrier Option — Monte Carlo", layout="wid
 
 TRADING_DAYS = 252
 
+
+@st.cache_data(ttl=600)
+def fetch_live_spot(ticker: str = "SPCX"):
+    """Fetch the latest traded price for SPCX (NASDAQ) via yfinance.
+    Cached for 10 minutes. Returns None if the fetch fails."""
+    try:
+        import yfinance as yf
+        data = yf.Ticker(ticker).history(period="5d")["Close"].dropna()
+        if len(data) == 0:
+            return None
+        return float(data.iloc[-1])
+    except Exception:
+        return None
+
+
 # ============================= Sidebar inputs =============================
 # All inputs are number boxes — type any value you want.
 st.sidebar.header("Option Parameters")
 
-S0 = st.sidebar.number_input("Spot price S₀ ($)", min_value=0.01, value=150.0, step=1.0, format="%.2f")
+use_live = st.sidebar.checkbox("Fetch live SPCX spot price", value=True,
+                               help="Pulls the latest NASDAQ:SPCX close via yfinance. "
+                                    "Untick to type your own spot price.")
+
+live_spot = fetch_live_spot() if use_live else None
+if use_live and live_spot is None:
+    st.sidebar.error("Couldn't fetch SPCX price — enter the spot manually below.")
+
+S0 = st.sidebar.number_input(
+    "Spot price S₀ ($)", min_value=0.01,
+    value=round(live_spot, 2) if live_spot else 150.0,
+    step=1.0, format="%.2f",
+    help="Auto-filled from the live SPCX price when the box above is ticked. "
+         "You can still override it by typing.",
+)
+if live_spot:
+    st.sidebar.caption(f"📡 Live SPCX: ${live_spot:,.2f} (delayed; cached 10 min)")
 K  = st.sidebar.number_input("Strike K ($)",      min_value=0.01, value=150.0, step=1.0, format="%.2f")
 B  = st.sidebar.number_input("Knockout barrier B ($)", min_value=0.01, value=250.0, step=1.0, format="%.2f")
 
